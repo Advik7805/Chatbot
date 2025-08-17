@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Monitor AI Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🖥️ System Monitor AI</h1>
+            <div class="status-indicator">
+                <div class="status-dot"></div>
+                <span id="connectionStatus">Connected</span>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="metrics-grid">
+                <div class="metric-card cpu">
+                    <div class="metric-value" id="cpuUsage">--</div>
+                    <div class="metric-label">CPU Usage</div>
+                </div>
+                <div class="metric-card memory">
+                    <div class="metric-value" id="memoryUsage">--</div>
+                    <div class="metric-label">Memory Usage</div>
+                </div>
+                <div class="metric-card disk">
+                    <div class="metric-value" id="diskUsage">--</div>
+                    <div class="metric-label">Disk Usage</div>
+                </div>
+                <div class="metric-card network">
+                    <div class="metric-value" id="networkStatus">--</div>
+                    <div class="metric-label">Network Status</div>
+                </div>
+            </div>
+            <!-- Realtime Chart -->
+            <div class="chart-container">
+                <h3>⏱️ Realtime System Metrics</h3>
+                <canvas id="realtimeChart" width="400" height="200"></canvas>
+            </div>
+        </div>
+
+        <div class="chatbot-panel">
+            <div class="chatbot-header">
+                <h2>
+                    <div class="ai-icon">🤖</div>
+                    AI System Assistant
+                </h2>
+                <p style="font-size: 0.9em; opacity: 0.9; margin-top: 5px;">
+                    Maintenance Prediction & Energy Optimization
+                </p>
+            </div>
+
+            <div class="chat-messages" id="chatMessages">
+                <div class="message system">
+                    🚀 AI Assistant initialized. I can help with maintenance predictions, energy optimization, and system analysis.
+                </div>
+                <div class="suggestions">
+                    <div class="suggestion" onclick="sendSuggestion('Analyze current system health')">🔍 System Health</div>
+                    <div class="suggestion" onclick="sendSuggestion('Predict maintenance needs')">🔧 Maintenance</div>
+                    <div class="suggestion" onclick="sendSuggestion('Optimize energy consumption')">⚡ Energy Tips</div>
+                    <div class="suggestion" onclick="sendSuggestion('Show performance trends')">📈 Trends</div>
+                </div>
+            </div>
+
+            <div class="typing-indicator" id="typingIndicator">
+                <div class="typing-dots">
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                </div>
+            </div>
+
+            <div class="chat-input">
+                <div class="input-group">
+                    <input type="text" id="chatInput" placeholder="Ask about system maintenance, optimization, or performance..." />
+                    <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+                        ➤
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // --- Realtime Chart Setup ---
+    const realtimeLabels = [];
+    const cpuData = [];
+    const memData = [];
+    const diskData = [];
+    const maxPoints = 30; // Show last 30 points
+
+    const realtimeChart = new Chart(document.getElementById('realtimeChart').getContext('2d'), {
+        type: 'line',
+        data: {
+            labels: realtimeLabels,
+            datasets: [
+                {
+                    label: 'CPU (%)',
+                    data: cpuData,
+                    borderColor: '#36a2eb',
+                    backgroundColor: 'rgba(54,162,235,0.1)',
+                    fill: true,
+                    tension: 0.3,
+                },
+                {
+                    label: 'Memory (%)',
+                    data: memData,
+                    borderColor: '#4bc0c0',
+                    backgroundColor: 'rgba(75,192,192,0.1)',
+                    fill: true,
+                    tension: 0.3,
+                },
+                {
+                    label: 'Disk (%)',
+                    data: diskData,
+                    borderColor: '#ff6384',
+                    backgroundColor: 'rgba(255,99,132,0.1)',
+                    fill: true,
+                    tension: 0.3,
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: true }
+            },
+            scales: {
+                y: {
+                    min: 0,
+                    max: 100,
+                    ticks: { stepSize: 20 }
+                }
+            }
+        }
+    });
+
+    async function fetchStats() {
+        try {
+            const response = await fetch('http://localhost:3000/stats');
+            const data = await response.json();
+            // CPU Usage
+            if (data.cpu && typeof data.cpu.currentload === 'number') {
+                document.getElementById('cpuUsage').textContent = data.cpu.currentload.toFixed(1) + '%';
+            }
+            // Memory Usage
+            if (data.memory && typeof data.memory.used === 'number' && typeof data.memory.total === 'number') {
+                const memPercent = (data.memory.used / data.memory.total) * 100;
+                document.getElementById('memoryUsage').textContent = memPercent.toFixed(1) + '%';
+            }
+            // Disk Usage
+            if (data.disks && Array.isArray(data.disks) && data.disks.length > 0) {
+                const disk = data.disks[0];
+                if (disk && typeof disk.used === 'number' && typeof disk.size === 'number') {
+                    const diskPercent = (disk.used / disk.size) * 100;
+                    document.getElementById('diskUsage').textContent = diskPercent.toFixed(1) + '%';
+                }
+            }
+            // Network Status
+            if (data.network && Array.isArray(data.network) && data.network.length > 0) {
+                const net = data.network[0];
+                document.getElementById('networkStatus').textContent =
+                    `↑${(net.tx_sec/1024).toFixed(1)}KB/s ↓${(net.rx_sec/1024).toFixed(1)}KB/s`;
+            }
+
+            // --- Update Realtime Chart ---
+            const now = new Date();
+            const label = now.getHours().toString().padStart(2, '0') + ':' +
+                          now.getMinutes().toString().padStart(2, '0') + ':' +
+                          now.getSeconds().toString().padStart(2, '0');
+            // Push new data
+            realtimeLabels.push(label);
+            cpuData.push(data.cpu && typeof data.cpu.currentload === 'number' ? data.cpu.currentload : null);
+            memData.push(data.memory && typeof data.memory.used === 'number' && typeof data.memory.total === 'number'
+                ? (data.memory.used / data.memory.total) * 100 : null);
+            diskData.push(data.disks && Array.isArray(data.disks) && data.disks.length > 0 && typeof data.disks[0].used === 'number' && typeof data.disks[0].size === 'number'
+                ? (data.disks[0].used / data.disks[0].size) * 100 : null);
+            // Keep only last maxPoints
+            if (realtimeLabels.length > maxPoints) {
+                realtimeLabels.shift();
+                cpuData.shift();
+                memData.shift();
+                diskData.shift();
+            }
+            realtimeChart.update();
+        } catch (err) {
+            document.getElementById('cpuUsage').textContent = '--';
+            document.getElementById('memoryUsage').textContent = '--';
+            document.getElementById('diskUsage').textContent = '--';
+            document.getElementById('networkStatus').textContent = '--';
+        }
+    }
+
+    // Fetch stats every 2 seconds
+    fetchStats();
+    setInterval(fetchStats, 2000);
+    </script>
+</body>
+</html>
