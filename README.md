@@ -32,3 +32,6 @@ Open `index.html` with Go Live (VS Code extension) or any local server:
 # Using Go Live in VS Code
 # Or use any static server to serve index.html
 ```
+
+### Screenshot
+
