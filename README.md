@@ -34,5 +34,5 @@ Open `index.html` with Go Live (VS Code extension) or any local server:
 ```
 
 ### Screenshot
-C:\Users\advik\OneDrive\Desktop\Screenshot 2025-08-20 194945.png
-C:\Users\advik\OneDrive\Desktop\Screenshot 2025-08-20 195047.png
+<img width="959" height="539" alt="Screenshot 2025-08-20 194945" src="https://github.com/user-attachments/assets/3d8a15be-9bc7-4612-a3b4-a75f7446af80" />
+<img width="959" height="539" alt="Screenshot 2025-08-20 195047" src="https://github.com/user-attachments/assets/fe9064cb-53c2-4ec5-9600-47ed7c3157ea" />
