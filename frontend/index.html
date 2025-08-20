@@ -75,24 +75,113 @@
                 </div>
             </div>
 
-            <div class="chat-input">
-                <div class="input-group">
-                    <input type="text" id="chatInput" placeholder="Ask about system maintenance, optimization, or performance..." />
-                    <button class="send-btn" id="sendBtn" onclick="sendMessage()">
-                        ➤
-                    </button>
-                </div>
+          <div class="chat-input">
+            <div class="input-group">
+                <input type="text" id="chatInput" placeholder="Loading system data..." disabled />
+                <button class="send-btn" id="sendBtn" onclick="sendMessage()" disabled>
+                    ➤
+                </button>
             </div>
         </div>
     </div>
 
     <script>
+        // --- Socket.io Connection & UI Elements ---
+    const socket = io("http://localhost:3000");
+    const chatMessages = document.getElementById('chatMessages');
+    const chatInput = document.getElementById('chatInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const typingIndicator = document.getElementById('typingIndicator');
+    const connectionStatus = document.getElementById('connectionStatus');
+    let isFirstFetch = true; // Flag to track the first data fetch
+
+    // --- Socket Event Handlers ---
+    socket.on('connect', () => {
+        console.log('✅ Connected to the server!');
+        connectionStatus.textContent = 'Connected';
+        document.querySelector('.status-dot').style.background = '#48bb78';
+    });
+
+    // Extra visibility for connection issues
+    socket.on('connect_error', (err) => {
+        console.error('⚠️ Socket connect_error:', err && err.message ? err.message : err);
+        connectionStatus.textContent = 'Error';
+        document.querySelector('.status-dot').style.background = '#f6ad55';
+        addMessageToUI('system', `Socket error: ${err && err.message ? err.message : 'Unknown error'}`);
+    });
+    socket.on('error', (err) => {
+        console.error('⚠️ Socket error:', err && err.message ? err.message : err);
+        addMessageToUI('system', `Socket error: ${err && err.message ? err.message : 'Unknown error'}`);
+    });
+
+    socket.on('disconnect', () => {
+        console.warn('Disconnected from the server.');
+        connectionStatus.textContent = 'Disconnected';
+        document.querySelector('.status-dot').style.background = '#f56565';
+    });
+    // --- Listener for RECEIVING bot responses ---
+    let responseTimeoutId = null;
+    socket.on('botResponse', (response) => {
+        if (responseTimeoutId) {
+            clearTimeout(responseTimeoutId);
+            responseTimeoutId = null;
+        }
+        typingIndicator.style.display = 'none'; // Hide typing indicator
+        addMessageToUI('bot', response);
+    });
+
+    // --- Function to add messages to the chat window ---
+    function addMessageToUI(sender, text) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${sender}`;
+        messageDiv.textContent = text;
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight; // Auto-scroll
+    }
+    // --- Functions to send messages ---
+    function sendMessage() {
+        const message = chatInput.value.trim();
+        if (message) {
+            addMessageToUI('user', message);
+            // Send message along with the latest system stats
+            socket.emit('sendMessage', message, currentSystemStats);
+            chatInput.value = '';
+            typingIndicator.style.display = 'block'; // Show typing indicator
+            if (responseTimeoutId) clearTimeout(responseTimeoutId);
+            responseTimeoutId = setTimeout(() => {
+                typingIndicator.style.display = 'none';
+                addMessageToUI('system', 'No response from the assistant. Please try again.');
+            }, 10000);
+        }
+    }
+
+    // This function handles the suggestion buttons
+    function sendSuggestion(text) {
+        addMessageToUI('user', text);
+        socket.emit('sendMessage', text, currentSystemStats);
+        typingIndicator.style.display = 'block';
+        if (responseTimeoutId) clearTimeout(responseTimeoutId);
+        responseTimeoutId = setTimeout(() => {
+            typingIndicator.style.display = 'none';
+            addMessageToUI('system', 'No response from the assistant. Please try again.');
+        }, 10000);
+    }
+    
+    // --- Event Listeners for user input ---
+    sendBtn.addEventListener('click', sendMessage);
+    chatInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            sendMessage();
+        }
+    });
     // --- Realtime Chart Setup ---
     const realtimeLabels = [];
     const cpuData = [];
     const memData = [];
     const diskData = [];
+    let currentSystemStats = {}; // To hold live data for the chatbot
     const maxPoints = 30; // Show last 30 points
+    
 
     const realtimeChart = new Chart(document.getElementById('realtimeChart').getContext('2d'), {
         type: 'line',
@@ -144,9 +233,23 @@
         try {
             const response = await fetch('http://localhost:3000/stats');
             const data = await response.json();
+             currentSystemStats = data; // Store the entire data object for the chatbot
+             if (isFirstFetch) {
+            // Enable the text input field
+            document.getElementById('chatInput').disabled = false;
+            
+            // Enable the send button
+            document.getElementById('sendBtn').disabled = false;
+            
+            // Update the placeholder text to be more helpful
+            document.getElementById('chatInput').placeholder = "Ask about system maintenance, optimization, or performance...";
+            
+            // Set the flag to false so this code never runs again
+            isFirstFetch = false; 
+        }
             // CPU Usage
-            if (data.cpu && typeof data.cpu.currentload === 'number') {
-                document.getElementById('cpuUsage').textContent = data.cpu.currentload.toFixed(1) + '%';
+            if (data.cpu && typeof data.cpu.currentLoad === 'number') {
+                document.getElementById('cpuUsage').textContent = data.cpu.currentLoad.toFixed(1) + '%';
             }
             // Memory Usage
             if (data.memory && typeof data.memory.used === 'number' && typeof data.memory.total === 'number') {
@@ -175,7 +278,7 @@
                           now.getSeconds().toString().padStart(2, '0');
             // Push new data
             realtimeLabels.push(label);
-            cpuData.push(data.cpu && typeof data.cpu.currentload === 'number' ? data.cpu.currentload : null);
+            cpuData.push(data.cpu && typeof data.cpu.currentLoad === 'number' ? data.cpu.currentLoad : null);
             memData.push(data.memory && typeof data.memory.used === 'number' && typeof data.memory.total === 'number'
                 ? (data.memory.used / data.memory.total) * 100 : null);
             diskData.push(data.disks && Array.isArray(data.disks) && data.disks.length > 0 && typeof data.disks[0].used === 'number' && typeof data.disks[0].size === 'number'
@@ -195,6 +298,7 @@
             document.getElementById('networkStatus').textContent = '--';
         }
     }
+   
 
     // Fetch stats every 2 seconds
     fetchStats();

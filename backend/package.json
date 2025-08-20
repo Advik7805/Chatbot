@@ -12,7 +12,7 @@
     "cors": "^2.8.5",
     "express": "^5.1.0",
     "nodemon": "^3.1.10",
-    "systeminfo": "^0.0.1",
+    "socket.io": "^4.8.1",
     "systeminformation": "^5.27.7"
   }
 }
